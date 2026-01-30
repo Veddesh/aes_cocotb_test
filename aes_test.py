@@ -1,6 +1,9 @@
 import cocotb
 from cocotb.triggers import RisingEdge, ReadOnly, Timer
 from cocotb.clock import Clock
+from Crypto.Util.Padding import pad, unpad 
+from Crypto.Cipher import AES 
+from Crypto.Random import get_random_bytes
 
 
 
@@ -84,10 +87,10 @@ async def test_aes_ecb_two_blocks(dut):
     # Two identical blocks for this test
     block_hex = "6bc1bee22e409f96e93d7e117393172a"
     block_bytes = bytes.fromhex(block_hex)
+    plaintext_refinput=block_bytes+block_bytes
     
-    # We expect the same result twice because it's ECB mode
-    expected_block = 0x47c58d5e21caaf840d015b7d9b910981
-    expected_full = [expected_block, expected_block]
+    expected_block = aes_ref(key_bytes,"ECB",plaintext_refinput)
+    
 
     # --- 3. SEND BLOCK 1 (Using Start) ---
     while not dut.RDY_start.value:
@@ -132,23 +135,29 @@ async def test_aes_ecb_two_blocks(dut):
 
     # --- 6. RECEIVE DATA (Looping twice) ---
     actual_results = []
-    
+
     for i in range(2):
         # Wait for each block to emerge from the pipeline
-        while not dut.RDY_get.value:
+        while dut.RDY_get.value == 0:
             await RisingEdge(dut.CLK)
-        
+
         dut.EN_get.value = 1
-        await ReadOnly() # Sample while EN is high
-        val = dut.get.value.to_unsigned()
+        await ReadOnly() 
+        val = int(dut.get.value) # Convert handle to int
         actual_results.append(val)
-        
+
         await RisingEdge(dut.CLK)
         dut.EN_get.value = 0
         dut._log.info(f"Retrieved Block {i+1}: {hex(val)}")
 
     # --- 7. Final Check ---
+    # Prepare reference integers from the bytes returned by aes_ref
     for i in range(2):
-        assert actual_results[i] == expected_full[i], f"Block {i} mismatch!"
-    
+        start_idx = i * 16
+        end_idx = start_idx + 16
+        ref_chunk = int.from_bytes(expected_block[start_idx:end_idx], "big")
+        
+        dut._log.info(f"Checking Block {i+1}: Exp={hex(ref_chunk)} Act={hex(actual_results[i])}")
+        assert actual_results[i] == ref_chunk, f"Block {i+1} mismatch!"
+
     dut._log.info("SUCCESS: Both blocks encrypted correctly in ECB mode.")
