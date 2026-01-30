@@ -1,6 +1,7 @@
 <testsuites name="results">
   <testsuite name="all" package="all">
-    <property name="random_seed" value="1769773769" />
-    <testcase name="test_aes_ecb_two_blocks" classname="aes_test" file="/work/aes_test.py" lineno="70" time="0.04762530326843262" sim_time_ns="1300.0" ratio_time="27296.41410728142" />
+    <property name="random_seed" value="1769775802" />
+    <testcase name="test_aes_ecb" classname="aes_test" file="/work/aes_test.py" lineno="68" time="0.04918479919433594" sim_time_ns="1300.0" ratio_time="26430.93031372397" />
+    <testcase name="test_aes_cbc" classname="aes_test" file="/work/aes_test.py" lineno="162" time="0.04560399055480957" sim_time_ns="1300.0000000000002" ratio_time="28506.277283729883" />
   </testsuite>
 </testsuites>

@@ -65,11 +65,9 @@ def aes_ref_dec(key,mode,ciphertext,iv= None,nonce=None,aad= b"",initial_counter
 
 
 
-
-
 @cocotb.test()
-async def test_aes_ecb_two_blocks(dut):
-    # --- 1. Clock & Reset ---
+async def test_aes_ecb(dut):
+
     cocotb.start_soon(Clock(dut.CLK, 10, unit="ns").start())
 
     dut.RST_N.value = 0
@@ -77,28 +75,124 @@ async def test_aes_ecb_two_blocks(dut):
     dut.EN_put.value = 0
     dut.EN_get.value = 0
     dut.EN_end_of_text.value = 0
+
+
+    await Timer(20, unit="ns")
+    dut.RST_N.value = 1
+    await RisingEdge(dut.CLK)
+
+
+    key_bytes = bytes.fromhex("000102030405060708090a0b0c0d0e0f")
+    block_hex = "6bc1bee22e409f96e93d7e117393172a"
+    block_bytes = bytes.fromhex(block_hex)
+    plaintext_refinput=block_bytes+block_bytes
+
+    expected_block = aes_ref(key_bytes,"ECB",plaintext_refinput)
+
+
+
+    while not dut.RDY_start.value:
+        await RisingEdge(dut.CLK)
+
+    dut.start_key.value = int.from_bytes(key_bytes, "big")
+    dut.start_intext.value =int.from_bytes(block_bytes, "big")
+
+    dut.start_mode.value = 0
+    dut.start_decrypt.value = 0
+    dut.start_keylenn.value = 0
+
+    dut.EN_start.value = 1
+    await RisingEdge(dut.CLK)
+    dut.EN_start.value = 0
+    dut._log.info("Block 1 sent via EN_start")
+
+
+
+    while not dut.RDY_put.value and dut.can_take_input.value:
+        await RisingEdge(dut.CLK)
+
+    dut.put_nxt_blk.value = int.from_bytes(block_bytes, "big")
+    dut.EN_put.value = 1
+    await RisingEdge(dut.CLK)
+    dut.EN_put.value = 0
+    dut._log.info("Block 2 sent via EN_put")
+
+
+
+
+
+
+
+    while not dut.RDY_end_of_text.value:
+        await RisingEdge(dut.CLK)
+
+    dut.EN_end_of_text.value = 1
+    await RisingEdge(dut.CLK)
+    dut.EN_end_of_text.value = 0
+    dut._log.info("End of Text signaled")
+
+
+    actual_results = []
+
+    for i in range(2):
+
+        while dut.RDY_get.value == 0:
+            await RisingEdge(dut.CLK)
+
+        dut.EN_get.value = 1
+        await ReadOnly()
+        val = int(dut.get.value)
+        actual_results.append(val)
+
+        await RisingEdge(dut.CLK)
+        dut.EN_get.value = 0
+        dut._log.info(f"Retrieved Block {i+1}: {hex(val)}")
+
+
+    for i in range(2):
+        start_idx = i * 16
+        end_idx = start_idx + 16
+        ref_chunk = int.from_bytes(expected_block[start_idx:end_idx], "big")
+
+        dut._log.info(f"Checking Block {i+1}: Exp={hex(ref_chunk)} Act={hex(actual_results[i])}")
+        assert actual_results[i] == ref_chunk, f"Block {i+1} mismatch!"
+
+    dut._log.info("SUCCESS: Both blocks encrypted correctly in ECB mode.")
+
+@cocotb.test()
+async def test_aes_cbc(dut):
+   
+    cocotb.start_soon(Clock(dut.CLK, 10, unit="ns").start())
+
+    dut.RST_N.value = 0
+    dut.EN_start.value = 0
+    dut.EN_put.value = 0
+    dut.EN_get.value = 0
+    dut.EN_end_of_text.value = 0
+
     
     await Timer(20, unit="ns")
     dut.RST_N.value = 1
     await RisingEdge(dut.CLK)
 
-    # --- 2. Data Setup ---
+   
     key_bytes = bytes.fromhex("000102030405060708090a0b0c0d0e0f")
-    # Two identical blocks for this test
+    iv=bytes.fromhex("000102030405060708090a0b0c0d0e0f")
     block_hex = "6bc1bee22e409f96e93d7e117393172a"
     block_bytes = bytes.fromhex(block_hex)
     plaintext_refinput=block_bytes+block_bytes
     
-    expected_block = aes_ref(key_bytes,"ECB",plaintext_refinput)
+    expected_block = aes_ref(key_bytes,"CBC",plaintext_refinput,iv)
     
 
-    # --- 3. SEND BLOCK 1 (Using Start) ---
+   
     while not dut.RDY_start.value:
         await RisingEdge(dut.CLK)
 
     dut.start_key.value = int.from_bytes(key_bytes, "big")
-    dut.start_intext.value = int.from_bytes(block_bytes, "big")
-    dut.start_mode.value = 0
+    dut.start_intext.value =int.from_bytes(block_bytes, "big")
+    dut.start_iv.value=int.from_bytes(iv,"big")
+    dut.start_mode.value = 1
     dut.start_decrypt.value = 0
     dut.start_keylenn.value = 0
     
@@ -107,8 +201,8 @@ async def test_aes_ecb_two_blocks(dut):
     dut.EN_start.value = 0
     dut._log.info("Block 1 sent via EN_start")
 
-    # --- 4. SEND BLOCK 2 (Using Put) ---
-    # Crucial: Wait until the core is ready to accept streaming data
+
+    
     while not dut.RDY_put.value and dut.can_take_input.value:
         await RisingEdge(dut.CLK)
 
@@ -123,8 +217,7 @@ async def test_aes_ecb_two_blocks(dut):
 
 
 
-    # --- 5. SIGNAL END OF TEXT ---
-    # This tells the core to finish the last block and flush the pipeline
+    
     while not dut.RDY_end_of_text.value:
         await RisingEdge(dut.CLK)
     
@@ -133,25 +226,24 @@ async def test_aes_ecb_two_blocks(dut):
     dut.EN_end_of_text.value = 0
     dut._log.info("End of Text signaled")
 
-    # --- 6. RECEIVE DATA (Looping twice) ---
+    
     actual_results = []
 
     for i in range(2):
-        # Wait for each block to emerge from the pipeline
+        
         while dut.RDY_get.value == 0:
             await RisingEdge(dut.CLK)
 
         dut.EN_get.value = 1
         await ReadOnly() 
-        val = int(dut.get.value) # Convert handle to int
+        val = int(dut.get.value) 
         actual_results.append(val)
 
         await RisingEdge(dut.CLK)
         dut.EN_get.value = 0
         dut._log.info(f"Retrieved Block {i+1}: {hex(val)}")
 
-    # --- 7. Final Check ---
-    # Prepare reference integers from the bytes returned by aes_ref
+    
     for i in range(2):
         start_idx = i * 16
         end_idx = start_idx + 16
@@ -160,4 +252,4 @@ async def test_aes_ecb_two_blocks(dut):
         dut._log.info(f"Checking Block {i+1}: Exp={hex(ref_chunk)} Act={hex(actual_results[i])}")
         assert actual_results[i] == ref_chunk, f"Block {i+1} mismatch!"
 
-    dut._log.info("SUCCESS: Both blocks encrypted correctly in ECB mode.")
+    dut._log.info("SUCCESS: Both blocks encrypted correctly in CBC mode.")
