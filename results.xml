@@ -1,7 +1,9 @@
 <testsuites name="results">
   <testsuite name="all" package="all">
-    <property name="random_seed" value="1769775802" />
-    <testcase name="test_aes_ecb" classname="aes_test" file="/work/aes_test.py" lineno="68" time="0.04918479919433594" sim_time_ns="1300.0" ratio_time="26430.93031372397" />
-    <testcase name="test_aes_cbc" classname="aes_test" file="/work/aes_test.py" lineno="162" time="0.04560399055480957" sim_time_ns="1300.0000000000002" ratio_time="28506.277283729883" />
+    <property name="random_seed" value="1769778611" />
+    <testcase name="test_aes_ecb" classname="aes_test" file="/work/aes_test.py" lineno="68" time="0.045983076095581055" sim_time_ns="1300.0" ratio_time="28271.270875784867" />
+    <testcase name="test_aes_cbc" classname="aes_test" file="/work/aes_test.py" lineno="163" time="0.04621005058288574" sim_time_ns="1300.0000000000002" ratio_time="28132.40807144811" />
+    <testcase name="test_aes_ofb" classname="aes_test" file="/work/aes_test.py" lineno="268" time="0.039954423904418945" sim_time_ns="1300.0" ratio_time="32537.072818517612" />
+    <testcase name="test_aes_ctr" classname="aes_test" file="/work/aes_test.py" lineno="367" time="0.04626107215881348" sim_time_ns="1299.9999999999995" ratio_time="28101.380692974897" />
   </testsuite>
 </testsuites>
