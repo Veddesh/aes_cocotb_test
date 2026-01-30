@@ -1,0 +1,6 @@
+<testsuites name="results">
+  <testsuite name="all" package="all">
+    <property name="random_seed" value="1769773201" />
+    <testcase name="test_aes_ecb_two_blocks" classname="aes_test" file="/work/aes_test.py" lineno="67" time="0.04308891296386719" sim_time_ns="1300.0" ratio_time="30170.173963082645" />
+  </testsuite>
+</testsuites>

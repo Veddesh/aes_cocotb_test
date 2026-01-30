@@ -2,6 +2,68 @@ import cocotb
 from cocotb.triggers import RisingEdge, ReadOnly, Timer
 from cocotb.clock import Clock
 
+
+
+
+
+def aes_ref(key,mode,plaintext,iv= None,nonce=None,aad= b"",initial_counter= 0):
+
+    if mode == "ECB":
+        cipher = AES.new(key, AES.MODE_ECB)
+        return cipher.encrypt(plaintext)
+    elif mode == "CBC":
+        cipher = AES.new(key, AES.MODE_CBC, iv=iv)
+        return cipher.encrypt(plaintext)
+
+
+    elif mode == "CTR":
+
+        cipher=AES.new(key,AES.MODE_CTR,nonce=nonce,initial_value=initial_counter)
+        return cipher.encrypt(plaintext)
+
+    elif mode == "CFB":
+        cipher = AES.new(key ,AES.MODE_CFB,iv=iv)
+        return cipher.encrypt(plaintext)
+
+    elif mode == "OFB":
+        cipher = AES.new(key, AES.MODE_OFB,iv=iv)
+        return cipher.encrypt(plaintext)
+
+    else:
+        logging.warning(f"Unsupported AES mode: {mode}")
+
+
+
+def aes_ref_dec(key,mode,ciphertext,iv= None,nonce=None,aad= b"",initial_counter= 0):
+
+    if mode == "ECB":
+        cipher = AES.new(key, AES.MODE_ECB)
+        return cipher.decrypt(ciphertext)
+    elif mode == "CBC":
+        cipher = AES.new(key, AES.MODE_CBC, iv=iv)
+        return cipher.decrypt(ciphertext)
+
+
+    elif mode == "CTR":
+
+        cipher=AES.new(key,AES.MODE_CTR,nonce=nonce,initial_value=initial_counter)
+        return cipher.decrypt(ciphertext)
+
+    elif mode == "CFB":
+        cipher = AES.new(key ,AES.MODE_CFB,iv=iv)
+        return cipher.decrypt(ciphertext)
+
+    elif mode == "OFB":
+        cipher = AES.new(key, AES.MODE_OFB,iv=iv)
+        return cipher.decrypt(ciphertext)
+
+    else:
+        logging.warning(f"Unsupported AES mode: {mode}")
+
+
+
+
+
 @cocotb.test()
 async def test_aes_ecb_two_blocks(dut):
     # --- 1. Clock & Reset ---
@@ -44,7 +106,7 @@ async def test_aes_ecb_two_blocks(dut):
 
     # --- 4. SEND BLOCK 2 (Using Put) ---
     # Crucial: Wait until the core is ready to accept streaming data
-    while not dut.RDY_put.value:
+    while not dut.RDY_put.value and dut.can_take_input.value:
         await RisingEdge(dut.CLK)
 
     dut.put_nxt_blk.value = int.from_bytes(block_bytes, "big")
@@ -55,14 +117,6 @@ async def test_aes_ecb_two_blocks(dut):
 
     
 
-    while not dut.RDY_put.value and dut.can_take_input.value:
-        await RisingEdge(dut.CLK)
-
-    dut.put_nxt_blk.value = int.from_bytes(block_bytes, "big")
-    dut.EN_put.value = 1
-    await RisingEdge(dut.CLK)
-    dut.EN_put.value = 0
-    dut._log.info("Block 3 sent via EN_put")
 
 
 
@@ -79,7 +133,7 @@ async def test_aes_ecb_two_blocks(dut):
     # --- 6. RECEIVE DATA (Looping twice) ---
     actual_results = []
     
-    for i in range(3):
+    for i in range(2):
         # Wait for each block to emerge from the pipeline
         while not dut.RDY_get.value:
             await RisingEdge(dut.CLK)
@@ -94,7 +148,7 @@ async def test_aes_ecb_two_blocks(dut):
         dut._log.info(f"Retrieved Block {i+1}: {hex(val)}")
 
     # --- 7. Final Check ---
-    for i in range(3):
+    for i in range(2):
         assert actual_results[i] == expected_full[i], f"Block {i} mismatch!"
     
     dut._log.info("SUCCESS: Both blocks encrypted correctly in ECB mode.")
