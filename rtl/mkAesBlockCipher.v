@@ -104,6 +104,10 @@ module mkAesBlockCipher(CLK,
   // value method outp_ready
   output outp_ready;
   output RDY_outp_ready;
+  initial begin
+    $dumpfile("waveform.vcd");
+    $dumpvars(1, mkAesBlockCipher);
+  end
 
   // value method can_take_input
   output can_take_input;
