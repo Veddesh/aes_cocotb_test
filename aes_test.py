@@ -9,7 +9,7 @@ from Crypto.Random import get_random_bytes
 
 
 
-def aes_ref(key,mode,plaintext,iv= None,nonce=None,aad= b"",initial_counter= 0):
+def aes_ref(key,mode,plaintext,iv= None,nonce=None,aad= b"",initial_counter= 0,segment_size=128):
 
     if mode == "ECB":
         cipher = AES.new(key, AES.MODE_ECB)
@@ -25,7 +25,7 @@ def aes_ref(key,mode,plaintext,iv= None,nonce=None,aad= b"",initial_counter= 0):
         return cipher.encrypt(plaintext)
 
     elif mode == "CFB":
-        cipher = AES.new(key ,AES.MODE_CFB,iv=iv)
+        cipher = AES.new(key ,AES.MODE_CFB,iv=iv,segment_size=segment_size)
         return cipher.encrypt(plaintext)
 
     elif mode == "OFB":
@@ -83,9 +83,11 @@ async def test_aes_ecb(dut):
 
 
     key_bytes = bytes.fromhex("000102030405060708090a0b0c0d0e0f")
-    block_hex = "6bc1bee22e409f96e93d7e117393172a"
-    block_bytes = bytes.fromhex(block_hex)
-    plaintext_refinput=block_bytes+block_bytes
+    block_hex1 = "6bc1bee22e409f96e93d7e117393172a"
+    block_hex2 = "acb1bee22e724f96e93d7e1173931111"
+    block_bytes1 = bytes.fromhex(block_hex1)
+    block_bytes2 = bytes.fromhex(block_hex2)
+    plaintext_refinput=block_bytes1+block_bytes2
 
     expected_block = aes_ref(key_bytes,"ECB",plaintext_refinput)
 
@@ -95,7 +97,7 @@ async def test_aes_ecb(dut):
         await RisingEdge(dut.CLK)
 
     dut.start_key.value = int.from_bytes(key_bytes, "big")
-    dut.start_intext.value =int.from_bytes(block_bytes, "big")
+    dut.start_intext.value =int.from_bytes(block_bytes1, "big")
 
     dut.start_mode.value = 0
     dut.start_decrypt.value = 0
@@ -111,7 +113,7 @@ async def test_aes_ecb(dut):
     while not dut.RDY_put.value and dut.can_take_input.value:
         await RisingEdge(dut.CLK)
 
-    dut.put_nxt_blk.value = int.from_bytes(block_bytes, "big")
+    dut.put_nxt_blk.value = int.from_bytes(block_bytes2, "big")
     dut.EN_put.value = 1
     await RisingEdge(dut.CLK)
     dut.EN_put.value = 0
@@ -136,11 +138,11 @@ async def test_aes_ecb(dut):
 
     for i in range(2):
 
-        while dut.RDY_get.value == 0:
+        while not dut.RDY_get.value:
             await RisingEdge(dut.CLK)
 
         dut.EN_get.value = 1
-        await ReadOnly()
+        await ReadOnly() 
         val = int(dut.get.value)
         actual_results.append(val)
 
@@ -254,7 +256,6 @@ async def test_aes_cbc(dut):
         assert actual_results[i] == ref_chunk, f"Block {i+1} mismatch!"
 
     dut._log.info("SUCCESS: Both blocks encrypted correctly in CBC mode.")
-
 
 
 
@@ -388,10 +389,8 @@ async def test_aes_ctr(dut):
     plaintext_refinput=block_bytes+block_bytes
 
     nonce_bytes = bytes.fromhex("f0f1f2f3f4f5f6f7") 
-    initial_count = 0
+    initial_count = 2
     
-    # Construct the 128-bit IV for the hardware: [Nonce (64-bit) | Counter (64-bit)]
-    # This must match how your reference model combines them internally
     iv_for_hardware = nonce_bytes + initial_count.to_bytes(8, "big")
 
 
@@ -432,7 +431,6 @@ async def test_aes_ctr(dut):
 
     while not dut.RDY_end_of_text.value:
         await RisingEdge(dut.CLK)
-
     dut.EN_end_of_text.value = 1
     await RisingEdge(dut.CLK)
     dut.EN_end_of_text.value = 0
@@ -465,3 +463,72 @@ async def test_aes_ctr(dut):
         assert actual_results[i] == ref_chunk, f"Block {i+1} mismatch!"
 
     dut._log.info("SUCCESS: Both blocks encrypted correctly in CTR mode.")
+
+@cocotb.test()
+async def test_aes_cfb(dut):
+    cocotb.start_soon(Clock(dut.CLK, 10, unit="ns").start())
+
+    dut.RST_N.value = 0
+    dut.EN_start.value = 0
+    dut.EN_put.value = 0
+    dut.EN_get.value = 0
+    dut.EN_end_of_text.value = 0
+
+    await Timer(20, unit="ns")
+    dut.RST_N.value = 1
+    await RisingEdge(dut.CLK)
+
+    key = bytes.fromhex("2b7e151628aed2a6abf7158809cf4f3c")
+    iv  = bytes.fromhex("000102030405060708090a0b0c0d0e0f")
+    p1  = bytes.fromhex("6bc1bee22e409f96e93d7e117393172a")
+    p2  = bytes.fromhex("ae2d8a571e03ac9c9eb76fac45af8e51")
+
+    expected_full = aes_ref(key, "CFB", p1 + p2, iv=iv, segment_size=128)
+    while not dut.RDY_start.value:
+        await RisingEdge(dut.CLK)
+
+    dut.start_key.value = int.from_bytes(key, "big")
+    dut.start_iv.value  = int.from_bytes(iv, "big")
+    dut.start_intext.value = int.from_bytes(p1, "big")
+    dut.start_mode.value = 2
+    dut.start_decrypt.value = 0
+    dut.start_keylenn.value = 0
+
+    dut.EN_start.value = 1
+    await RisingEdge(dut.CLK)
+    dut.EN_start.value = 0
+
+    while not (dut.RDY_put.value and dut.can_take_input.value):
+        await RisingEdge(dut.CLK)
+
+    dut.put_nxt_blk.value = int.from_bytes(p2, "big")
+    dut.EN_put.value = 1
+    await RisingEdge(dut.CLK)
+    dut.EN_put.value = 0
+
+    while not dut.RDY_end_of_text.value:
+        await RisingEdge(dut.CLK)
+
+    dut.EN_end_of_text.value = 1
+    await RisingEdge(dut.CLK)
+    dut.EN_end_of_text.value = 0
+
+    results = []
+    for i in range(1):
+        while not dut.RDY_get.value:
+            await RisingEdge(dut.CLK)
+
+        dut.EN_get.value = 1
+        await ReadOnly()
+        val = int(dut.get.value)
+        results.append(val)
+        await RisingEdge(dut.CLK)
+        dut.EN_get.value = 0
+
+        ref = int.from_bytes(expected_full[i*16:(i+1)*16], "big")
+
+        dut._log.info(f"Block {i}: Exp={hex(ref)} Act={hex(val)}")
+        assert val == ref, f"Block {i} mismatch! Exp: {hex(ref)}, Act: {hex(val)}"
+    dut._log.info("SUCCESS: Both blocks encrypted correctly in CFB mode.")
+
+

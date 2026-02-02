@@ -1,9 +1,10 @@
 <testsuites name="results">
   <testsuite name="all" package="all">
-    <property name="random_seed" value="1769778611" />
-    <testcase name="test_aes_ecb" classname="aes_test" file="/work/aes_test.py" lineno="68" time="0.045983076095581055" sim_time_ns="1300.0" ratio_time="28271.270875784867" />
-    <testcase name="test_aes_cbc" classname="aes_test" file="/work/aes_test.py" lineno="163" time="0.04621005058288574" sim_time_ns="1300.0000000000002" ratio_time="28132.40807144811" />
-    <testcase name="test_aes_ofb" classname="aes_test" file="/work/aes_test.py" lineno="268" time="0.039954423904418945" sim_time_ns="1300.0" ratio_time="32537.072818517612" />
-    <testcase name="test_aes_ctr" classname="aes_test" file="/work/aes_test.py" lineno="367" time="0.04626107215881348" sim_time_ns="1299.9999999999995" ratio_time="28101.380692974897" />
+    <property name="random_seed" value="1770011594" />
+    <testcase name="test_aes_ecb" classname="aes_test" file="/work/aes_test.py" lineno="68" time="0.05477428436279297" sim_time_ns="1300.0" ratio_time="23733.765125794376" />
+    <testcase name="test_aes_cbc" classname="aes_test" file="/work/aes_test.py" lineno="165" time="0.05108213424682617" sim_time_ns="1300.0000000000002" ratio_time="25449.21074985765" />
+    <testcase name="test_aes_ofb" classname="aes_test" file="/work/aes_test.py" lineno="269" time="0.044301509857177734" sim_time_ns="1300.0" ratio_time="29344.372329318565" />
+    <testcase name="test_aes_ctr" classname="aes_test" file="/work/aes_test.py" lineno="368" time="0.051175594329833984" sim_time_ns="1299.9999999999995" ratio_time="25402.73380356493" />
+    <testcase name="test_aes_cfb" classname="aes_test" file="/work/aes_test.py" lineno="467" time="0.034628868103027344" sim_time_ns="950.0" ratio_time="27433.758365233676" />
   </testsuite>
 </testsuites>
