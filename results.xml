@@ -1,0 +1,24 @@
+<testsuites name="results">
+  <testsuite name="all" package="all">
+    <property name="random_seed" value="1770206040" />
+    <testcase name="test_aes_ecb_kat/vector=0" classname="aes_test" file="/py_env/lib/python3.12/site-packages/cocotb/_decorators.py" lineno="99" time="0.05158090591430664" sim_time_ns="940.0" ratio_time="18223.79780536733" />
+    <testcase name="test_aes_ecb_kat/vector=1" classname="aes_test" file="/py_env/lib/python3.12/site-packages/cocotb/_decorators.py" lineno="99" time="0.04345989227294922" sim_time_ns="940.0" ratio_time="21629.1378288824" />
+    <testcase name="test_aes_ecb_kat/vector=2" classname="aes_test" file="/py_env/lib/python3.12/site-packages/cocotb/_decorators.py" lineno="99" time="0.04195761680603027" sim_time_ns="940.0" ratio_time="22403.560343896854" />
+    <testcase name="test_aes_ecb_kat/vector=3" classname="aes_test" file="/py_env/lib/python3.12/site-packages/cocotb/_decorators.py" lineno="99" time="0.04217243194580078" sim_time_ns="940.0" ratio_time="22289.44257253341" />
+    <testcase name="test_aes_ecb_kat/vector=4" classname="aes_test" file="/py_env/lib/python3.12/site-packages/cocotb/_decorators.py" lineno="99" time="0.03852510452270508" sim_time_ns="940.0" ratio_time="24399.674229203025" />
+    <testcase name="test_aes_ecb_kat/vector=5" classname="aes_test" file="/py_env/lib/python3.12/site-packages/cocotb/_decorators.py" lineno="99" time="0.03920388221740723" sim_time_ns="940.0" ratio_time="23977.21722525284" />
+    <testcase name="test_aes_ecb_kat/vector=6" classname="aes_test" file="/py_env/lib/python3.12/site-packages/cocotb/_decorators.py" lineno="99" time="0.04000353813171387" sim_time_ns="940.0" ratio_time="23497.92153146549" />
+    <testcase name="test_aes_ecb_kat/vector=7" classname="aes_test" file="/py_env/lib/python3.12/site-packages/cocotb/_decorators.py" lineno="99" time="0.04873394966125488" sim_time_ns="1040.0" ratio_time="21340.359384555173" />
+    <testcase name="test_aes_ecb_kat/vector=8" classname="aes_test" file="/py_env/lib/python3.12/site-packages/cocotb/_decorators.py" lineno="99" time="0.046494483947753906" sim_time_ns="1040.0" ratio_time="22368.244825959428" />
+    <testcase name="test_aes_ecb_kat/vector=9" classname="aes_test" file="/py_env/lib/python3.12/site-packages/cocotb/_decorators.py" lineno="99" time="0.050420284271240234" sim_time_ns="1040.0" ratio_time="20626.619128230832" />
+    <testcase name="test_aes_ecb_kat/vector=10" classname="aes_test" file="/py_env/lib/python3.12/site-packages/cocotb/_decorators.py" lineno="99" time="0.05103325843811035" sim_time_ns="1040.0" ratio_time="20378.867268709502" />
+    <testcase name="test_aes_ecb_kat/vector=11" classname="aes_test" file="/py_env/lib/python3.12/site-packages/cocotb/_decorators.py" lineno="99" time="0.05188179016113281" sim_time_ns="1040.0" ratio_time="20045.568912907613" />
+    <testcase name="test_aes_ecb_kat/vector=12" classname="aes_test" file="/py_env/lib/python3.12/site-packages/cocotb/_decorators.py" lineno="99" time="0.051242828369140625" sim_time_ns="1040.0" ratio_time="20295.522965830416" />
+    <testcase name="test_aes_ecb_kat/vector=13" classname="aes_test" file="/py_env/lib/python3.12/site-packages/cocotb/_decorators.py" lineno="99" time="0.05023479461669922" sim_time_ns="1040.0" ratio_time="20702.781964878974" />
+    <testcase name="test_aes_ecb/arg1=0/arg3=0" classname="aes_test" file="/py_env/lib/python3.12/site-packages/cocotb/_decorators.py" lineno="111" time="0.04235410690307617" sim_time_ns="940.0" ratio_time="22193.833579140537" />
+    <testcase name="test_aes_cbc/arg1=0/arg2=0/arg3=0" classname="aes_test" file="/py_env/lib/python3.12/site-packages/cocotb/_decorators.py" lineno="119" time="0.048009395599365234" sim_time_ns="940.0" ratio_time="19579.500809471312" />
+    <testcase name="test_aes_cfb/arg1=0/arg2=0/arg3=0" classname="aes_test" file="/py_env/lib/python3.12/site-packages/cocotb/_decorators.py" lineno="129" time="0.04785275459289551" sim_time_ns="940.0" ratio_time="19643.59226541909" />
+    <testcase name="test_aes_ofb/arg1=0/arg2=0/arg3=0" classname="aes_test" file="/py_env/lib/python3.12/site-packages/cocotb/_decorators.py" lineno="139" time="0.04849672317504883" sim_time_ns="940.0" ratio_time="19382.752863674352" />
+    <testcase name="test_aes_ctr/arg1=0/arg3=0/arg4=0/arg5=2" classname="aes_test" file="/py_env/lib/python3.12/site-packages/cocotb/_decorators.py" lineno="149" time="0.04862046241760254" sim_time_ns="940.0" ratio_time="19333.423691578933" />
+  </testsuite>
+</testsuites>
