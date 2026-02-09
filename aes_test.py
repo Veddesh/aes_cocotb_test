@@ -22,139 +22,216 @@ def aes_ref(key, mode, text, iv=None, nonce=None, initial_counter=0, decrypt=Fal
     else:
         return cipher.encrypt(text)
 
-async def run_aes_test_flow(dut, mode_code, mode_name, key, p1, iv=None, nonce=None, counter=0, decrypt=False):
-    cocotb.start_soon(Clock(dut.CLK, 10, unit="ns").start())
-    dut.RST_N.value = 0
-    dut.EN_start.value = 0
-    dut.EN_put.value = 0
-    dut.EN_get.value = 0
-    dut.EN_end_of_text.value = 0
-    await Timer(20, unit="ns")
-    dut.RST_N.value = 1
-    await RisingEdge(dut.CLK)
+class AESTestbench:
+    def __init__(self, dut):
+        self.dut = dut
+        cocotb.start_soon(Clock(self.dut.CLK, 10, unit="ns").start())
 
-    # Correctly passing decrypt flag to reference model
-    expected = aes_ref(key, mode_name, p1, iv=iv, nonce=nonce, initial_counter=counter, decrypt=decrypt)
+    async def reset(self):
+        self.dut.RST_N.value = 0
+        self.dut.EN_start.value = 0
+        self.dut.EN_put.value = 0
+        self.dut.EN_get.value = 0
+        self.dut.EN_end_of_text.value = 0
+        await RisingEdge(self.dut.CLK)
+        await RisingEdge(self.dut.CLK)
+        self.dut.RST_N.value = 1
+        await RisingEdge(self.dut.CLK)
 
-    while not dut.RDY_start.value:
-        await RisingEdge(dut.CLK)
+    async def run_aes_test_flow(self, mode_code, mode_name, key, p1, text_out, iv=None, nonce=None, counter=0, decrypt=False):
+        key_len_bytes = len(key)
+        if key_len_bytes == 16:
+            key_lenn_val = 0
+        elif key_len_bytes == 24:
+            key_lenn_val = 1
+        elif key_len_bytes == 32:
+            key_lenn_val = 2
 
-    dut.start_key.value = int.from_bytes(key, "big")
-    if iv:
-        dut.start_iv.value = int.from_bytes(iv, "big")
+        expected = aes_ref(key, mode_name, p1, iv=iv, nonce=nonce, initial_counter=counter, decrypt=decrypt)
 
-    dut.start_intext.value = int.from_bytes(p1, "big")
-    dut.start_mode.value = mode_code
-    dut.start_keylenn.value = 0
-    dut.start_decrypt.value = 1 if decrypt else 0
+        while not self.dut.RDY_start.value:
+            await RisingEdge(self.dut.CLK)
 
-    dut.EN_start.value = 1
-    await RisingEdge(dut.CLK)
-    dut.EN_start.value = 0
+        self.dut.start_key.value = int.from_bytes(key, "big")
+        if iv:
+            self.dut.start_iv.value = int.from_bytes(iv, "big")
 
-    while not dut.RDY_get.value:
-        await RisingEdge(dut.CLK)
+        self.dut.start_intext.value = int.from_bytes(p1, "big")
+        self.dut.start_mode.value = mode_code
+        self.dut.start_keylenn.value = key_lenn_val
+        self.dut.start_decrypt.value = 1 if decrypt else 0
 
-    dut.EN_get.value = 1
-    await ReadOnly()
+        self.dut.EN_start.value = 1
+        await RisingEdge(self.dut.CLK)
+        self.dut.EN_start.value = 0
 
-    val1 = int(dut.get.value)
-    exp1 = int.from_bytes(expected[0:16], "big")
+        while not self.dut.RDY_get.value:
+            await RisingEdge(self.dut.CLK)
 
-    dut._log.info(f"{mode_name} {'DECRYPT' if decrypt else 'ENCRYPT'} B1: Exp={hex(exp1)} Act={hex(val1)}")
-    assert val1 == exp1
+        self.dut.EN_get.value = 1
+        await ReadOnly()
 
-    await RisingEdge(dut.CLK)
-    dut.EN_get.value = 0
+        val1 = int(self.dut.get.value)
+        exp1 = int.from_bytes(expected, "big")
+        nist1 = int.from_bytes(text_out, "big")
+        self.dut._log.info(f"{mode_name} {'DECRYPT' if decrypt else 'ENCRYPT'} ({key_len_bytes*8}-bit) B1: Exp={hex(exp1)} Act={hex(val1)} NIST={hex(nist1)}")
+        assert val1 == exp1 == nist1
 
-    while not dut.RDY_end_of_text.value:
-        await RisingEdge(dut.CLK)
+        await RisingEdge(self.dut.CLK)
+        self.dut.EN_get.value = 0
 
-    dut.EN_end_of_text.value = 1
-    await RisingEdge(dut.CLK)
-    dut.EN_end_of_text.value = 0
+        while not self.dut.RDY_end_of_text.value:
+            await RisingEdge(self.dut.CLK)
+
+        self.dut.EN_end_of_text.value = 1
+        await RisingEdge(self.dut.CLK)
+        self.dut.EN_end_of_text.value = 0
 
 def parse_rsp_file(filepath):
     tests = []
-    current_decrypt_state = False 
+    current_decrypt_state = False
+    key = iv = pt = ct = None
     with open(filepath, "r") as f:
-        key, pt, ct = None, None, None
         for line in f:
             line = line.strip()
             if line == "[ENCRYPT]":
                 current_decrypt_state = False
+                key = iv = pt = ct = None
                 continue
             elif line == "[DECRYPT]":
                 current_decrypt_state = True
+                key = iv = pt = ct = None
                 continue
-            if line.startswith("KEY ="):
-                key = line.split("=")[1].strip()
-            elif line.startswith("PLAINTEXT ="):
-                pt = line.split("=")[1].strip()
-            elif line.startswith("CIPHERTEXT ="):
-                ct = line.split("=")[1].strip()
-                tests.append({"key": key, "pt": pt, "ct": ct, "decrypt": current_decrypt_state})
+            if not line or line.startswith("#") or line.startswith("COUNT"):
+                continue
+            if "=" in line:
+                parts = line.split("=")
+                setting = parts[0].strip()
+                value = parts[1].strip()
+                if setting == "KEY": key = value
+                elif setting == "IV": iv = value
+                elif setting == "PLAINTEXT": pt = value
+                elif setting == "CIPHERTEXT": ct = value
+                if pt is not None and ct is not None:
+                    tests.append({"key": key,"pt": pt,"iv": iv,"ct": ct,"decrypt": current_decrypt_state})
+                    pt = ct = None
     return tests
 
 @cocotb.test()
-@cocotb.parametrize(
-    vector = parse_rsp_file(os.path.join("vectors", "ECB", "ECBGFSbox128.rsp"))
-)
+@cocotb.parametrize(vector = parse_rsp_file(os.path.join("vectors", "ECB", "ECBGFSbox128.rsp")))
 async def test_aes_ecb_kat(dut, vector):
+    tb = AESTestbench(dut)
+    await tb.reset()
     key = bytes.fromhex(vector["key"])
     is_decrypt = vector["decrypt"]
-    # Logic: If we are testing Decrypt, we feed Ciphertext to the DUT
     text_in = bytes.fromhex(vector["ct"] if is_decrypt else vector["pt"])
-    
-    await run_aes_test_flow(dut, 0, "ECB", key, text_in, decrypt=is_decrypt)
+    text_out = bytes.fromhex(vector["pt"] if is_decrypt else vector["ct"])
+    await tb.run_aes_test_flow(0, "ECB", key, text_in, text_out, decrypt=is_decrypt)
+
 
 @cocotb.test()
-@cocotb.parametrize(arg1=["f34481ec3cc627bacd5dc3fb08f273e6"],
-                     arg3=["00000000000000000000000000000000"])
-async def test_aes_ecb(dut, arg1, arg3):
-    k = bytes.fromhex(arg3)
-    p1 = bytes.fromhex(arg1)
-    await run_aes_test_flow(dut, 0, "ECB", k, p1)
+@cocotb.parametrize(vector = parse_rsp_file(os.path.join("vectors", "ECB", "ECBGFSbox192.rsp")))
+async def test_aes_ecb_192kat(dut, vector):
+    tb = AESTestbench(dut)
+    await tb.reset()
+    key = bytes.fromhex(vector["key"])
+    is_decrypt = vector["decrypt"]
+    text_in = bytes.fromhex(vector["ct"] if is_decrypt else vector["pt"])
+    text_out = bytes.fromhex(vector["pt"] if is_decrypt else vector["ct"])
+    await tb.run_aes_test_flow(0, "ECB", key, text_in, text_out, decrypt=is_decrypt)
 
 @cocotb.test()
-@cocotb.parametrize(arg1=["000102030405060708090a0b0c0d0e0f"],
-                     arg2=["ae2d8a571e03ac9c9eb76fac45af8e51"],
-                     arg3=["000102030405060708090a0b0c0d0e0f"])
-async def test_aes_cbc(dut, arg1, arg2, arg3):
-    k = bytes.fromhex(arg1)
-    iv = bytes.fromhex(arg2)
-    p1 = bytes.fromhex(arg3)
-    await run_aes_test_flow(dut, 1, "CBC", k, p1, iv=iv)
+@cocotb.parametrize(vector = parse_rsp_file(os.path.join("vectors", "ECB", "ECBGFSbox256.rsp")))
+async def test_aes_ecb_256kat(dut, vector):
+    tb = AESTestbench(dut)
+    await tb.reset()
+    key = bytes.fromhex(vector["key"])
+    is_decrypt = vector["decrypt"]
+    text_in = bytes.fromhex(vector["ct"] if is_decrypt else vector["pt"])
+    text_out = bytes.fromhex(vector["pt"] if is_decrypt else vector["ct"])
+    await tb.run_aes_test_flow(0, "ECB", key, text_in, text_out, decrypt=is_decrypt)
+
 
 @cocotb.test()
-@cocotb.parametrize(arg1=["000102030405060708090a0b0c0d0e0f"],
-                     arg2=["ae2d8a571e03ac9c9eb76fac45af8e51"],
-                     arg3=["000102030405060708090a0b0c0d0e0f"])
-async def test_aes_cfb(dut, arg1, arg2, arg3):
-    k = bytes.fromhex(arg1)
-    iv = bytes.fromhex(arg2)
-    p1 = bytes.fromhex(arg3)
-    await run_aes_test_flow(dut, 2, "CFB", k, p1, iv=iv)
+@cocotb.parametrize(vector = parse_rsp_file(os.path.join("vectors", "OFB", "OFBGFSbox128.rsp")))
+async def test_aes_ofb_kat(dut, vector):
+    tb = AESTestbench(dut)
+    await tb.reset()
+    key = bytes.fromhex(vector["key"])
+    iv = bytes.fromhex(vector["iv"])
+    is_decrypt = vector["decrypt"]
+    text_in = bytes.fromhex(vector["ct"] if is_decrypt else vector["pt"])
+    text_out = bytes.fromhex(vector["pt"] if is_decrypt else vector["ct"])
+    await tb.run_aes_test_flow(3, "OFB", key, text_in, text_out, iv=iv, decrypt=is_decrypt)
 
 @cocotb.test()
-@cocotb.parametrize(arg1=["000102030405060708090a0b0c0d0e0f"],
-                     arg2=["ae2d8a571e03ac9c9eb76fac45af8e51"],
-                     arg3=["000102030405060708090a0b0c0d0e0f"])
-async def test_aes_ofb(dut, arg1, arg2, arg3):
-    k = bytes.fromhex(arg3)
-    iv = bytes.fromhex(arg2)
-    p1 = bytes.fromhex(arg1)
-    await run_aes_test_flow(dut, 3, "OFB", k, p1, iv=iv)
+@cocotb.parametrize(vector = parse_rsp_file(os.path.join("vectors", "OFB", "OFBKeySbox256.rsp")))
+async def test_aes_ofb_256kat(dut, vector):
+    tb = AESTestbench(dut)
+    await tb.reset()
+    key = bytes.fromhex(vector["key"])
+    iv = bytes.fromhex(vector["iv"])
+    is_decrypt = vector["decrypt"]
+    text_in = bytes.fromhex(vector["ct"] if is_decrypt else vector["pt"])
+    text_out = bytes.fromhex(vector["pt"] if is_decrypt else vector["ct"])
+    await tb.run_aes_test_flow(3, "OFB", key, text_in, text_out, iv=iv, decrypt=is_decrypt)
 
 @cocotb.test()
-@cocotb.parametrize(arg1=["000102030405060708090a0b0c0d0e0f"],
-                     arg3=["f0f1f2f3f4f5f6f7"],
-                     arg4=["000102030405060708090a0b0c0d0e0f"],
-                     arg5=[2])
-async def test_aes_ctr(dut, arg1, arg3, arg4, arg5):
-    k = bytes.fromhex(arg4)
-    p1 = bytes.fromhex(arg1)
-    nonce = bytes.fromhex(arg3)
-    cnt = arg5
-    iv_hw = nonce + cnt.to_bytes(8, "big")
-    await run_aes_test_flow(dut, 4, "CTR", k, p1, iv=iv_hw, nonce=nonce, counter=cnt)
+@cocotb.parametrize(vector = parse_rsp_file(os.path.join("vectors", "OFB", "OFBKeySbox192.rsp")))
+async def test_aes_ofb_192kat(dut, vector):
+    tb = AESTestbench(dut)
+    await tb.reset()
+    key = bytes.fromhex(vector["key"])
+    iv = bytes.fromhex(vector["iv"])
+    is_decrypt = vector["decrypt"]
+    text_in = bytes.fromhex(vector["ct"] if is_decrypt else vector["pt"])
+    text_out = bytes.fromhex(vector["pt"] if is_decrypt else vector["ct"])
+    await tb.run_aes_test_flow(3, "OFB", key, text_in, text_out, iv=iv, decrypt=is_decrypt)
+
+@cocotb.test()
+@cocotb.parametrize(vector = parse_rsp_file(os.path.join("vectors", "CBC", "CBCGFSbox128.rsp")))
+async def test_aes_cbc_kat(dut, vector):
+    tb = AESTestbench(dut)
+    await tb.reset()
+    key = bytes.fromhex(vector["key"])
+    iv = bytes.fromhex(vector["iv"])
+    is_decrypt = vector["decrypt"]
+    text_in = bytes.fromhex(vector["ct"] if is_decrypt else vector["pt"])
+    text_out = bytes.fromhex(vector["pt"] if is_decrypt else vector["ct"])
+    await tb.run_aes_test_flow(1, "CBC", key, text_in, text_out, iv=iv, decrypt=is_decrypt)
+
+@cocotb.test()
+@cocotb.parametrize(vector = parse_rsp_file(os.path.join("vectors", "CFB", "CFB128GFSbox128.rsp")))
+async def test_aes_cfb_kat_gfsbox(dut, vector):
+    tb = AESTestbench(dut)
+    await tb.reset()
+    key = bytes.fromhex(vector["key"])
+    iv = bytes.fromhex(vector["iv"])
+    is_decrypt = vector["decrypt"]
+    text_in = bytes.fromhex(vector["ct"] if is_decrypt else vector["pt"])
+    text_out = bytes.fromhex(vector["pt"] if is_decrypt else vector["ct"])
+    await tb.run_aes_test_flow(2, "CFB", key, text_in, text_out, iv=iv, decrypt=is_decrypt)
+
+@cocotb.test()
+@cocotb.parametrize(vector = parse_rsp_file(os.path.join("vectors", "CFB", "CFB128VarTxt128.rsp")))
+async def test_aes_cfb_kat_vartxt(dut, vector):
+    tb = AESTestbench(dut)
+    await tb.reset()
+    key = bytes.fromhex(vector["key"])
+    iv = bytes.fromhex(vector["iv"])
+    is_decrypt = vector["decrypt"]
+    text_in = bytes.fromhex(vector["ct"] if is_decrypt else vector["pt"])
+    text_out = bytes.fromhex(vector["pt"] if is_decrypt else vector["ct"])
+    await tb.run_aes_test_flow(2, "CFB", key, text_in, text_out, iv=iv, decrypt=is_decrypt)
+
+@cocotb.test()
+@cocotb.parametrize(vector = parse_rsp_file(os.path.join("vectors", "CBC", "CBCVarKey128.rsp")))
+async def test_aes_cbc_kat_varkey(dut, vector):
+    tb = AESTestbench(dut)
+    await tb.reset()
+    key = bytes.fromhex(vector["key"])
+    iv = bytes.fromhex(vector["iv"])
+    is_decrypt = vector["decrypt"]
+    text_in = bytes.fromhex(vector["ct"] if is_decrypt else vector["pt"])
+    text_out = bytes.fromhex(vector["pt"] if is_decrypt else vector["ct"])
+    await tb.run_aes_test_flow(1, "CBC", key, text_in, text_out, iv=iv, decrypt=is_decrypt)
