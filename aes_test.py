@@ -25,20 +25,24 @@ def aes_ref(key, mode, text, iv=None, nonce=None, initial_counter=0, decrypt=Fal
 class AESTestbench:
     def __init__(self, dut):
         self.dut = dut
-        cocotb.start_soon(Clock(self.dut.CLK, 10, unit="ns").start())
 
     async def reset(self):
+        cocotb.start_soon(Clock(self.dut.CLK, 10, unit="ns").start())
         self.dut.RST_N.value = 0
         self.dut.EN_start.value = 0
         self.dut.EN_put.value = 0
         self.dut.EN_get.value = 0
         self.dut.EN_end_of_text.value = 0
+        
         await RisingEdge(self.dut.CLK)
         await RisingEdge(self.dut.CLK)
+        
         self.dut.RST_N.value = 1
         await RisingEdge(self.dut.CLK)
+        self.dut._log.info("Reset complete.")
 
-    async def run_aes_test_flow(self, mode_code, mode_name, key, p1, text_out, iv=None, nonce=None, counter=0, decrypt=False):
+    async def run_aes_test_flow(self, mode_code, mode_name, key, text_in, text_out=None, iv=None, nonce=None, counter=0, decrypt=False):
+        cocotb.start_soon(Clock(self.dut.CLK, 10, unit="ns").start())
         key_len_bytes = len(key)
         if key_len_bytes == 16:
             key_lenn_val = 0
@@ -47,38 +51,58 @@ class AESTestbench:
         elif key_len_bytes == 32:
             key_lenn_val = 2
 
-        expected = aes_ref(key, mode_name, p1, iv=iv, nonce=nonce, initial_counter=counter, decrypt=decrypt)
+        expected_full = aes_ref(key, mode_name, text_in, iv=iv, nonce=nonce, initial_counter=counter, decrypt=decrypt)
 
-        while not self.dut.RDY_start.value:
+        input_blocks = [text_in[i:i+16] for i in range(0, len(text_in), 16)]
+        ref_blocks = [expected_full[i:i+16] for i in range(0, len(expected_full), 16)]
+        
+        nist_blocks = None
+        if text_out:
+            nist_blocks = [text_out[i:i+16] for i in range(0, len(text_out), 16)]
+
+        for i in range(len(input_blocks)):
+            if i == 0:
+                while not self.dut.RDY_start.value:
+                    await RisingEdge(self.dut.CLK)
+
+                self.dut.start_key.value = int.from_bytes(key, "big")
+                if iv: self.dut.start_iv.value = int.from_bytes(iv, "big")
+                self.dut.start_intext.value = int.from_bytes(input_blocks[i], "big")
+                self.dut.start_mode.value = mode_code
+                self.dut.start_keylenn.value = key_lenn_val
+                self.dut.start_decrypt.value = 1 if decrypt else 0
+
+                self.dut.EN_start.value = 1
+                await RisingEdge(self.dut.CLK)
+                self.dut.EN_start.value = 0
+            else:
+                while not self.dut.RDY_put.value:
+                    await RisingEdge(self.dut.CLK)
+
+                self.dut.put_nxt_blk.value = int.from_bytes(input_blocks[i], "big")
+                self.dut.EN_put.value = 1
+                await RisingEdge(self.dut.CLK)
+                self.dut.EN_put.value = 0
+
+            while not self.dut.RDY_get.value:
+                await RisingEdge(self.dut.CLK)
+
+            self.dut.EN_get.value = 1
+            await ReadOnly()
+
+            val_dut = int(self.dut.get.value)
+            val_ref = int.from_bytes(ref_blocks[i], "big")
+
+            if nist_blocks:
+                val_nist = int.from_bytes(nist_blocks[i], "big")
+                self.dut._log.info(f"TRIPLE CHECK Block {i}: DUT={hex(val_dut)} REF={hex(val_ref)} NIST={hex(val_nist)}")
+                assert val_dut == val_ref == val_nist, f"Mismatch at block {i}"
+            else:
+                self.dut._log.info(f"DOUBLE CHECK Block {i}: DUT={hex(val_dut)} REF={hex(val_ref)}")
+                assert val_dut == val_ref, f"Mismatch at block {i}"
+
             await RisingEdge(self.dut.CLK)
-
-        self.dut.start_key.value = int.from_bytes(key, "big")
-        if iv:
-            self.dut.start_iv.value = int.from_bytes(iv, "big")
-
-        self.dut.start_intext.value = int.from_bytes(p1, "big")
-        self.dut.start_mode.value = mode_code
-        self.dut.start_keylenn.value = key_lenn_val
-        self.dut.start_decrypt.value = 1 if decrypt else 0
-
-        self.dut.EN_start.value = 1
-        await RisingEdge(self.dut.CLK)
-        self.dut.EN_start.value = 0
-
-        while not self.dut.RDY_get.value:
-            await RisingEdge(self.dut.CLK)
-
-        self.dut.EN_get.value = 1
-        await ReadOnly()
-
-        val1 = int(self.dut.get.value)
-        exp1 = int.from_bytes(expected, "big")
-        nist1 = int.from_bytes(text_out, "big")
-        self.dut._log.info(f"{mode_name} {'DECRYPT' if decrypt else 'ENCRYPT'} ({key_len_bytes*8}-bit) B1: Exp={hex(exp1)} Act={hex(val1)} NIST={hex(nist1)}")
-        assert val1 == exp1 == nist1
-
-        await RisingEdge(self.dut.CLK)
-        self.dut.EN_get.value = 0
+            self.dut.EN_get.value = 0
 
         while not self.dut.RDY_end_of_text.value:
             await RisingEdge(self.dut.CLK)
@@ -86,6 +110,9 @@ class AESTestbench:
         self.dut.EN_end_of_text.value = 1
         await RisingEdge(self.dut.CLK)
         self.dut.EN_end_of_text.value = 0
+
+
+
 
 def parse_rsp_file(filepath):
     tests = []
@@ -235,3 +262,17 @@ async def test_aes_cbc_kat_varkey(dut, vector):
     text_in = bytes.fromhex(vector["ct"] if is_decrypt else vector["pt"])
     text_out = bytes.fromhex(vector["pt"] if is_decrypt else vector["ct"])
     await tb.run_aes_test_flow(1, "CBC", key, text_in, text_out, iv=iv, decrypt=is_decrypt)
+
+
+@cocotb.test()
+async def test_aes_cbc_2blocks(dut):
+    tb = AESTestbench(dut)
+    await tb.reset()
+
+    key = bytes.fromhex("2b7e151628aed2a6abf7158809cf4f3c")
+    iv  = bytes.fromhex("000102030405060708090a0b0c0d0e0f")
+    
+    pt = bytes.fromhex("6bc1bee22e409f96e93d7e117393172aae2d8a571e03ac9c9eb76fac45af8e51")
+    
+
+    await tb.run_aes_test_flow(mode_code=1, mode_name="CBC", key=key, text_in=pt, iv=iv, decrypt=False)
